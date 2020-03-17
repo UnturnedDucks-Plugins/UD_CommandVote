@@ -63,7 +63,7 @@ namespace UD_CommandVote
                 {"vote_not_available", "The vote option {0} is not available" },
                 {"no_vote_running", "There is no vote currently running, type /cv [votename] to start one!" },
                 {"vote_already_running", "There is already a vote running, wait for this one to complete first" },
-                {"vote_started", "The vote for {0} has started and will finish in {1} seconds" },
+                {"vote_started", "The vote for {0} that requires {1}% has started and will finish in {2} seconds" },
                 {"already_voted", "You have already voted!"},
                 {"voted", "The vote for {0} is now at {1}%" },
                 {"vote_failed", "Not enough players voted for {0} :(" },
@@ -88,21 +88,44 @@ namespace UD_CommandVote
         {
             if (VoteRunning)
             {
-                if (VotedPlayers.Contains(caller))
+                if (hasVoted(caller))
                 {
                     UnturnedChat.Say(caller, Translate("already_voted"), Color.yellow);
                     return;
                 }
+                else
+                {
+                    // add the player to the already voted list
+                    VotedPlayers.Add(caller);
 
-                VotedPlayers.Add(caller);
-                double CurPercentage = 100 * (((double)VotedPlayers.Count) / OnlinePlayers);
-                UnturnedChat.Say(Translate("voted", CurrentVote, CurPercentage), Color.yellow);
+                    // tell the entire server the status of the poll
+                    double CurPercentage = getCurrentPercentage();
+                    UnturnedChat.Say(Translate("voted", CurrentVote, CurPercentage), Color.yellow);
+
+                    // check if the minimum has been reached
+                    if (CurPercentage > RequiredPercentage)
+                    {
+                        finishVote();
+                        return;
+                    }
+
+                }
             }
             else
             {
                 // tell the caller that there is no vote actually running
                 UnturnedChat.Say(caller, Translate("no_vote_running"), Color.yellow);
             }
+        }
+
+        private double getCurrentPercentage()
+        {
+            return 100 * (((double)VotedPlayers.Count) / OnlinePlayers);
+        }
+
+        private bool hasVoted(IRocketPlayer caller)
+        {
+            return VotedPlayers.Contains(caller);
         }
 
         public void StartVote(IRocketPlayer caller, string command)
@@ -118,34 +141,22 @@ namespace UD_CommandVote
                 }
 
                 // initiate the voting sequence
-                this.VoteRunning = true;
-                this.CurrentVote = command;
-                this.VotedPlayers = new List<IRocketPlayer>(); 
-                this.OnlinePlayers = Provider.clients.Select(p => UnturnedPlayer.FromCSteamID(p.playerID.steamID)).Count();
-                VoteOnCooldown = true;
+                initiateVote(command);
 
-                UnturnedChat.Say(Translate("vote_started", command, VoteRunTime), Color.yellow);
+                UnturnedChat.Say(Translate("vote_started", command, RequiredPercentage * 100, VoteRunTime), Color.yellow);
                 Vote(caller);
 
                 // begin the cooldown
-                TaskDispatcher.QueueOnMainThread(() => { VoteOnCooldown = false; }, VoteCooldownTime + VoteRunTime);
+                TaskDispatcher.QueueOnMainThread(() =>
+                {
+                    VoteOnCooldown = false;
+                }, VoteCooldownTime + VoteRunTime);
 
                 // set the timer
                 TaskDispatcher.QueueOnMainThread(() =>
                 {
-                    double CurPercentage = ((double)VotedPlayers.Count) / OnlinePlayers;
-                    // check if the minimum has been reached
-                    if (CurPercentage > RequiredPercentage)
-                    {
-                        UnturnedChat.Say(Translate("vote_successful", CurrentVote), Color.yellow);
-                        runCommand(CurrentVote);
-                    }
-                    else
-                    {
-                        UnturnedChat.Say(Translate("vote_failed", CurrentVote), Color.yellow);
-                    }
-
-                    resetVote();
+                    if (VoteRunning)
+                        finishVote();
                 }, VoteRunTime);
             }
             else
@@ -166,6 +177,35 @@ namespace UD_CommandVote
             return false;
         }
 
+        private void finishVote()
+        {
+            double CurPercentage = getCurrentPercentage();
+            // check if the minimum has been reached
+            if (CurPercentage > RequiredPercentage)
+            {
+                UnturnedChat.Say(Translate("vote_successful", CurrentVote), Color.yellow);
+                runCommand(CurrentVote);
+            }
+            else
+            {
+                UnturnedChat.Say(Translate("vote_failed", CurrentVote), Color.yellow);
+            }
+
+            resetVote();
+        }
+
+        private bool isVoteFinished()
+        {
+            double curPercentage = ((double)VotedPlayers.Count) / OnlinePlayers;
+            if (curPercentage > RequiredPercentage)
+            {
+                finishVote();
+                return true;
+            }
+
+            return false;
+        }
+
         private void resetVote()
         {
             VoteRunning = false;
@@ -174,15 +214,26 @@ namespace UD_CommandVote
             OnlinePlayers = 0;
         }
 
+        private void initiateVote(string command)
+        {
+            this.VoteRunning = true;
+            this.CurrentVote = command;
+            this.VotedPlayers = new List<IRocketPlayer>();
+            this.OnlinePlayers = Provider.clients.Select(p => UnturnedPlayer.FromCSteamID(p.playerID.steamID)).Count();
+            this.VoteOnCooldown = true;
+        }
+
         private void runCommand(string command)
         {
             switch (command.ToLower())
             {
                 case ("day"):
+                    Logger.LogWarning("Setting time to Day");
                     LightingManager.time = (uint)(LightingManager.cycle * LevelLighting.transition);
                     return;
                 case ("night"):
                     // cant actually figure out the time for night
+                    Logger.LogWarning("Setting time to Night");
                     LightingManager.time = 2600;
                     return;
                 case ("airdrop"):
