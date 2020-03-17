@@ -32,8 +32,8 @@ namespace UD_CommandVote
             LoadCommand("Night", Configuration.Instance.NightEnabled);
             LoadCommand("Kick", Configuration.Instance.KickEnabled);
 
-            this.RequiredPercentage = Configuration.Instance.RequiredPercentage / 100;
-            if (this.RequiredPercentage < 0 || this.RequiredPercentage > 1) { this.RequiredPercentage = .6; }
+            this.RequiredPercentage = Configuration.Instance.RequiredPercentage;
+            if (this.RequiredPercentage < 0 || this.RequiredPercentage > 1) { this.RequiredPercentage = 60; }
 
             this.VoteRunTime = Configuration.Instance.VoteRunTimeSeconds;
             this.VoteCooldownTime = Configuration.Instance.VoteCooldownTimeSeconds;
@@ -143,7 +143,7 @@ namespace UD_CommandVote
                 // initiate the voting sequence
                 initiateVote(command);
 
-                UnturnedChat.Say(Translate("vote_started", command, RequiredPercentage * 100, VoteRunTime), Color.yellow);
+                UnturnedChat.Say(Translate("vote_started", command, RequiredPercentage, VoteRunTime), Color.yellow);
                 Vote(caller);
 
                 // begin the cooldown
@@ -192,18 +192,6 @@ namespace UD_CommandVote
             }
 
             resetVote();
-        }
-
-        private bool isVoteFinished()
-        {
-            double curPercentage = ((double)VotedPlayers.Count) / OnlinePlayers;
-            if (curPercentage > RequiredPercentage)
-            {
-                finishVote();
-                return true;
-            }
-
-            return false;
         }
 
         private void resetVote()
