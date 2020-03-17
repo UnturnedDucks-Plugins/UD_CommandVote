@@ -81,14 +81,14 @@ namespace UD_CommandVote
         public bool VoteOnCooldown;
         public bool VoteRunning;
         public string CurrentVote;
-        public List<IRocketPlayer> VotedPlayers;
+        public List<string> VotedPlayers;
         public int OnlinePlayers;
 
         public void Vote(IRocketPlayer caller)
         {
             if (VoteRunning)
             {
-                if (hasVoted(caller))
+                if (hasVoted(caller.DisplayName))
                 {
                     UnturnedChat.Say(caller, Translate("already_voted"), Color.yellow);
                     return;
@@ -96,7 +96,7 @@ namespace UD_CommandVote
                 else
                 {
                     // add the player to the already voted list
-                    VotedPlayers.Add(caller);
+                    VotedPlayers.Add(caller.DisplayName); 
 
                     // tell the entire server the status of the poll
                     double CurPercentage = getCurrentPercentage();
@@ -123,9 +123,9 @@ namespace UD_CommandVote
             return 100 * (((double)VotedPlayers.Count) / OnlinePlayers);
         }
 
-        private bool hasVoted(IRocketPlayer caller)
+        private bool hasVoted(string caller)
         {
-            return VotedPlayers.Contains(caller);
+            return VotedPlayers == null || VotedPlayers.Contains(caller);
         }
 
         public void StartVote(IRocketPlayer caller, string command)
@@ -206,7 +206,7 @@ namespace UD_CommandVote
         {
             this.VoteRunning = true;
             this.CurrentVote = command;
-            this.VotedPlayers = new List<IRocketPlayer>();
+            this.VotedPlayers = new List<string>();
             this.OnlinePlayers = Provider.clients.Select(p => UnturnedPlayer.FromCSteamID(p.playerID.steamID)).Count();
             this.VoteOnCooldown = true;
         }
